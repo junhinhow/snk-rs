@@ -143,9 +143,15 @@ pub fn render(grid: &Grid, plan: &SnakePlan, options: &RenderOptions) -> String 
     svg.push_str(".l0{fill:var(--c0)}.l1{fill:var(--c1)}.l2{fill:var(--c2)}.l3{fill:var(--c3)}.l4{fill:var(--c4)}");
     // Each of the three roles is lit only inside its own window of the loop,
     // then stays hidden for the rest of it.
-    svg.push_str(&format!(".seg{{fill:var(--cs);opacity:0;animation:seg {duration:.3}s linear infinite}}"));
-    svg.push_str(&format!(".head{{fill:var(--ch);opacity:0;animation:head {duration:.3}s linear infinite}}"));
-    svg.push_str(&format!(".eat{{fill:var(--c4);opacity:0;animation:eat {duration:.3}s linear infinite}}"));
+    svg.push_str(&format!(
+        ".seg{{fill:var(--cs);opacity:0;animation:seg {duration:.3}s linear infinite}}"
+    ));
+    svg.push_str(&format!(
+        ".head{{fill:var(--ch);opacity:0;animation:head {duration:.3}s linear infinite}}"
+    ));
+    svg.push_str(&format!(
+        ".eat{{fill:var(--c4);opacity:0;animation:eat {duration:.3}s linear infinite}}"
+    ));
     svg.push_str(&keyframes("seg", body_window));
     svg.push_str(&keyframes("head", head_window));
     svg.push_str(&keyframes("eat", food_window));

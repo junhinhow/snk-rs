@@ -13,7 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   10s. The body length (9 cells) and the grid stay exactly the same.
 - `--duration` now only drives the snake; the 3D bars have their own
   `--3d-duration` flag (10s) so the two animations stay independent.
-- The snake crawls over the whole grid in a serpentine instead of only hopping
+- The snake hunts the contribution cells the way the reference does: it works
+  through the grid one intensity level at a time and, for each level, walks to
+  the nearest cell it can reach, treating brighter cells as walls. It no
+  longer sweeps the board row by row.- ~~The snake crawls over the whole grid in a serpentine~~ instead of only hopping
   between the days with contributions, so the animation fills the board like
   the classic game.
 - The body is drawn as grid cells that light up in turn -- the leading cell is

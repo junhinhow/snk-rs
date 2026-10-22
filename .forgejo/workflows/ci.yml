@@ -3,21 +3,12 @@ name: CI
 on:
   push:
     branches: [main]
-    paths:
-      - "**/*.rs"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - ".forgejo/workflows/ci.yml"
   pull_request:
     branches: [main]
   workflow_dispatch:
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
   quality:
-    name: fmt, clippy and tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +28,6 @@ jobs:
         run: cargo test --all-features
 
   build:
-    name: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,10 +40,6 @@ jobs:
 
       - name: Generate a snake to prove the tool works
         run: |
-          cargo run --release -- \
-            --user octocat \
-            --palette github-dark \
-            --color-snake "#16A34A" \
-            --output smoke-test.svg
+          cargo run --release -- --user octocat --palette github-dark --output smoke-test.svg
           test -s smoke-test.svg
           grep -q "<svg" smoke-test.svg

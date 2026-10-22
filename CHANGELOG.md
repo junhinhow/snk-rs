@@ -7,16 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The snake now crawls over the whole grid in a serpentine instead of only
+  hopping between the days with contributions, so the animation fills the
+  board like the classic game.
+- The body is a solid rounded stroke that slides along the route (a moving
+  dash) with a head and eyes following the leading edge, replacing the
+  previous approach of cells blinking in sequence.
+
 ### Fixed
 
-- The grid was invisible on the dark palette: the background rectangle used the
-  same colour as the empty cells. The canvas now has its own colour (`page`)
-  and the empty cells are drawn against it.
-- The snake used to be drawn as one long stroke of the whole route, which
-  looked like a straight line across the grid when the contributions were
-  sparse. The body is now a wave of cells lighting up in the order the head
-  visits them: a compact snake that keeps moving, like the reference
-  implementation. Days holding contributions flash brighter as it eats them.
+- The grid was invisible on the dark palette: the background rectangle used
+  the same colour as the empty cells. The canvas now has its own colour
+  (`page`) and the empty cells are drawn against it.
 
 ## [0.2.0] - 2026-10-22
 

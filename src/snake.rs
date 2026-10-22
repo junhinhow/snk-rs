@@ -1,6 +1,9 @@
 //! The snake: how it moves across the grid and which cells it eats.
-
-use std::collections::{HashSet, VecDeque};
+//!
+//! The snake crawls over the *whole* grid in a serpentine (boustrophedon):
+//! it sweeps the bottom row, climbs one row and sweeps back, and so on. This
+//! fills the board like the classic game and guarantees that every day with
+//! contributions is eaten on the way.
 
 use crate::grid::Grid;
 
@@ -23,104 +26,38 @@ impl SnakePlan {
 
 /// Plans the whole journey of the snake over the grid.
 ///
-/// The snake always heads for the closest cell that still holds contributions
-/// and eats it on arrival. The search is a breadth first search over the grid,
-/// so the snake never gets stuck behind its own trail.
+/// The trajectory is a serpentine that starts at the bottom left and ends on
+/// the opposite row, visiting every single cell exactly once. The snake eats
+/// a cell as soon as it steps onto it, so the days with contributions are
+/// naturally collected in the order they are reached.
 pub fn plan(grid: &Grid) -> SnakePlan {
-    let mut food: HashSet<(usize, usize)> = grid.food_cells().into_iter().collect();
-    let start = start_cell(grid);
-
-    let mut path = vec![start];
+    let mut path = Vec::with_capacity(grid.cols * grid.rows);
     let mut eaten = Vec::new();
-    if food.remove(&start) {
-        eaten.push((start.0, start.1, 0));
-    }
 
-    // Safety net: never plan more movements than there are cells in the grid.
-    let max_steps = grid.cols * grid.rows * 4;
+    let mut row = grid.rows.saturating_sub(1);
+    let mut rightwards = true;
 
-    while let Some(next) = next_step(grid, *path.last().expect("path is never empty"), &food) {
-        let step = path.len();
-        path.push(next);
-        if food.remove(&next) {
-            eaten.push((next.0, next.1, step));
+    loop {
+        let columns: Box<dyn Iterator<Item = usize>> = if rightwards {
+            Box::new(0..grid.cols)
+        } else {
+            Box::new((0..grid.cols).rev())
+        };
+        for col in columns {
+            let step = path.len();
+            path.push((col, row));
+            if grid.is_food(col, row) {
+                eaten.push((col, row, step));
+            }
         }
-        if path.len() > max_steps {
+        if row == 0 {
             break;
         }
+        row -= 1;
+        rightwards = !rightwards;
     }
 
     SnakePlan { path, eaten }
-}
-
-/// The cell the snake starts from: bottom left, like every good snake.
-fn start_cell(grid: &Grid) -> (usize, usize) {
-    let row = grid.rows.saturating_sub(1);
-    (0, row)
-}
-
-/// Finds the next cell to move to: one step along the shortest path to the
-/// closest cell that still holds contributions.
-fn next_step(
-    grid: &Grid,
-    head: (usize, usize),
-    food: &HashSet<(usize, usize)>,
-) -> Option<(usize, usize)> {
-    if food.is_empty() {
-        return None;
-    }
-
-    let mut previous: Vec<Option<(usize, usize)>> = vec![None; grid.cols * grid.rows];
-    let mut visited: Vec<bool> = vec![false; grid.cols * grid.rows];
-    let mut queue: VecDeque<(usize, usize)> = VecDeque::new();
-
-    queue.push_back(head);
-    visited[head.1 * grid.cols + head.0] = true;
-
-    let mut target = None;
-    while let Some(current) = queue.pop_front() {
-        if current != head && food.contains(&current) {
-            target = Some(current);
-            break;
-        }
-        for neighbour in neighbours(grid, current) {
-            let index = neighbour.1 * grid.cols + neighbour.0;
-            if !visited[index] {
-                visited[index] = true;
-                previous[index] = Some(current);
-                queue.push_back(neighbour);
-            }
-        }
-    }
-
-    let target = target?;
-    // Walk the path backwards to the head and return the cell next to it.
-    let mut cursor = target;
-    loop {
-        let parent = previous[cursor.1 * grid.cols + cursor.0]?;
-        if parent == head {
-            return Some(cursor);
-        }
-        cursor = parent;
-    }
-}
-
-/// The four orthogonal neighbours of a cell that are inside the grid.
-fn neighbours(grid: &Grid, (col, row): (usize, usize)) -> Vec<(usize, usize)> {
-    let mut result = Vec::with_capacity(4);
-    if col > 0 {
-        result.push((col - 1, row));
-    }
-    if col + 1 < grid.cols {
-        result.push((col + 1, row));
-    }
-    if row > 0 {
-        result.push((col, row - 1));
-    }
-    if row + 1 < grid.rows {
-        result.push((col, row + 1));
-    }
-    result
 }
 
 #[cfg(test)]
@@ -139,6 +76,19 @@ mod tests {
             })
             .collect();
         ContributionCalendar { days, total: 0 }
+    }
+
+    #[test]
+    fn snake_visits_every_cell_exactly_once() {
+        let calendar = calendar(&[("2024-01-03", 2), ("2024-01-10", 3)]);
+        let grid = Grid::from_calendar(&calendar).unwrap();
+        let plan = plan(&grid);
+
+        assert_eq!(plan.path.len(), grid.cols * grid.rows);
+        let mut seen = std::collections::HashSet::new();
+        for cell in &plan.path {
+            assert!(seen.insert(*cell), "cell {cell:?} visited twice");
+        }
     }
 
     #[test]
@@ -181,11 +131,11 @@ mod tests {
     }
 
     #[test]
-    fn empty_grid_produces_a_single_cell_path() {
+    fn empty_grid_still_fills_the_board() {
         let calendar = calendar(&[("2024-01-03", 0)]);
         let grid = Grid::from_calendar(&calendar).unwrap();
         let plan = plan(&grid);
-        assert_eq!(plan.path.len(), 1);
+        assert_eq!(plan.path.len(), grid.cols * grid.rows);
         assert!(plan.eaten.is_empty());
     }
 }

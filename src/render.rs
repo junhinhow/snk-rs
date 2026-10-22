@@ -1,18 +1,15 @@
 //! The renderer: turns a grid and a snake plan into a self contained SVG.
 //!
-//! The snake is not drawn as a line but as a wave of cells lighting up in the
-//! order the head visits them: the lit cells *are* the body, the newest one is
-//! the head. This is what keeps the image readable when the contributions are
-//! sparse and the route is a set of long straight lines.
-
-use std::collections::HashSet;
+//! The snake is a solid, rounded stroke that crawls along the serpentine route
+//! using a moving dash, with a head (and eyes) following the leading edge.
+//! Days with contributions flash brighter as the snake eats them.
 
 use crate::grid::Grid;
 use crate::palette::Palette;
 use crate::snake::SnakePlan;
 
-/// How many cells of the body are lit at the same time.
-const BODY_CELLS: f32 = 5.0;
+/// How many cells long the snake body is.
+const BODY_CELLS: f32 = 10.0;
 
 /// How the SVG should look.
 #[derive(Debug, Clone)]
@@ -35,8 +32,8 @@ impl Default for RenderOptions {
     fn default() -> Self {
         Self {
             palette: Palette::github_dark(),
-            cell: 11,
-            gap: 2,
+            cell: 12,
+            gap: 4,
             margin: 4,
             duration: 10.0,
             title: "GitHub contribution snake".to_string(),
@@ -56,13 +53,13 @@ pub fn render(grid: &Grid, plan: &SnakePlan, options: &RenderOptions) -> String 
     };
     let radius = (options.cell / 4).max(1);
 
-    let x_of = |col: usize| options.margin + col as u32 * pitch;
-    let y_of = |row: usize| options.margin + row as u32 * pitch;
+    // Centre of a cell, used to route the snake.
+    let cx_of = |col: usize| options.margin + col as u32 * pitch + options.cell / 2;
+    let cy_of = |row: usize| options.margin + row as u32 * pitch + options.cell / 2;
 
-    let total_steps = plan.path.len().max(1) as f32;
-    // How long a single cell stays lit: the body length, in seconds.
-    let flash = (BODY_CELLS / total_steps * duration).clamp(0.12, 1.5);
-    let eat_flash = (flash * 1.8).min(duration);
+    let total_steps = plan.steps().max(1) as f32;
+    let path_length = total_steps * pitch as f32;
+    let body_length = (BODY_CELLS * pitch as f32).min(path_length);
 
     // --- cells -------------------------------------------------------------
     let mut cells = String::new();
@@ -72,8 +69,8 @@ pub fn render(grid: &Grid, plan: &SnakePlan, options: &RenderOptions) -> String 
                 let level = day.level.min(4);
                 cells.push_str(&format!(
                     "<rect class=\"l{level}\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{radius}\"/>",
-                    x_of(col),
-                    y_of(row),
+                    options.margin + col as u32 * pitch,
+                    options.margin + row as u32 * pitch,
                     options.cell,
                     options.cell
                 ));
@@ -81,20 +78,22 @@ pub fn render(grid: &Grid, plan: &SnakePlan, options: &RenderOptions) -> String 
         }
     }
 
-    // --- the snake: cells that light up in turn ----------------------------
-    let food: HashSet<(usize, usize)> = plan.eaten.iter().map(|(c, r, _)| (*c, *r)).collect();
-    let mut segments = String::new();
-    for (step, (col, row)) in plan.path.iter().enumerate() {
-        let delay = (step as f32 / total_steps) * duration;
-        let class = if food.contains(&(*col, *row)) {
-            "eat"
-        } else {
-            "seg"
-        };
-        segments.push_str(&format!(
-            "<rect class=\"{class}\" style=\"animation-delay:{delay:.3}s\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{radius}\"/>",
-            x_of(*col),
-            y_of(*row),
+    // --- the route (through every cell centre) ----------------------------
+    let mut route = String::new();
+    for (index, (col, row)) in plan.path.iter().enumerate() {
+        let command = if index == 0 { "M" } else { "L" };
+        route.push_str(&format!("{command} {} {}", cx_of(*col), cy_of(*row)));
+    }
+
+    // --- cells eaten by the snake -----------------------------------------
+    // A day flashes bright green for a short moment as the head passes over it.
+    let mut eaten = String::new();
+    for (col, row, step) in &plan.eaten {
+        let arrival = (*step as f32 / total_steps) * duration;
+        eaten.push_str(&format!(
+            "<rect class=\"eat\" style=\"animation-delay:{arrival:.3}s\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{radius}\"/>",
+            options.margin + *col as u32 * pitch,
+            options.margin + *row as u32 * pitch,
             options.cell,
             options.cell
         ));
@@ -102,7 +101,7 @@ pub fn render(grid: &Grid, plan: &SnakePlan, options: &RenderOptions) -> String 
 
     // --- assembly ----------------------------------------------------------
     let palette = &options.palette;
-    let mut svg = String::with_capacity(32 * 1024);
+    let mut svg = String::with_capacity(16 * 1024);
 
     svg.push_str(&format!(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width}\" height=\"{height}\" viewBox=\"0 0 {width} {height}\" role=\"img\" aria-label=\"{}\">",
@@ -131,27 +130,28 @@ pub fn render(grid: &Grid, plan: &SnakePlan, options: &RenderOptions) -> String 
     ));
     svg.push_str(".bg{fill:var(--cp)}");
     svg.push_str(".l0{fill:var(--c0)}.l1{fill:var(--c1)}.l2{fill:var(--c2)}.l3{fill:var(--c3)}.l4{fill:var(--c4)}");
-    // Every segment animates over the whole loop, but only flashes inside the
-    // short window when the head passes over it. The delay of each cell places
-    // that window at the right moment.
-    let window = flash / duration * 100.0;
-    let eat_window = eat_flash / duration * 100.0;
-    svg.push_str(".seg{fill:var(--cs);opacity:0;animation:seg ");
+    // The body: a dash of `body_length` that slides from the start of the
+    // route to its end over one loop.
+    svg.push_str(&format!(
+        ".body{{fill:none;stroke:var(--cs);stroke-width:{};stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:{} {};animation:crawl {duration:.3}s linear infinite}}",
+        options.cell,
+        fmt(body_length),
+        fmt(path_length)
+    ));
+    svg.push_str(&format!(
+        "@keyframes crawl{{from{{stroke-dashoffset:0}}to{{stroke-dashoffset:{}}}}}",
+        fmt(-(path_length - body_length))
+    ));
+    // The flash of a day being eaten: it lights up only inside the short
+    // window when the head is on top of it, then fades for the rest of the loop.
+    let window = (BODY_CELLS / total_steps * 100.0).clamp(1.0, 10.0);
+    svg.push_str(".eat{fill:var(--c4);opacity:0;animation:eat ");
     svg.push_str(&format!("{duration:.3}s linear infinite}}"));
     svg.push_str(&format!(
-        ".eat{{fill:var(--c4);opacity:0;animation:eat {duration:.3}s linear infinite}}"
-    ));
-    svg.push_str(&format!(
-        "@keyframes seg{{0%{{opacity:0}}{:.3}%{{opacity:1}}{:.3}%{{opacity:1}}{:.3}%{{opacity:0}}100%{{opacity:0}}}}",
-        window * 0.18,
-        window * 0.55,
-        window
-    ));
-    svg.push_str(&format!(
         "@keyframes eat{{0%{{opacity:0}}{:.3}%{{opacity:1}}{:.3}%{{opacity:1}}{:.3}%{{opacity:0}}100%{{opacity:0}}}}",
-        eat_window * 0.18,
-        eat_window * 0.55,
-        eat_window
+        window * 0.2,
+        window * 0.6,
+        window
     ));
     svg.push_str("</style>");
 
@@ -159,10 +159,38 @@ pub fn render(grid: &Grid, plan: &SnakePlan, options: &RenderOptions) -> String 
         "<rect class=\"bg\" width=\"{width}\" height=\"{height}\" rx=\"{radius}\"/>"
     ));
     svg.push_str(&format!("<g class=\"grid\">{cells}</g>"));
-    svg.push_str(&format!("<g class=\"snake\">{segments}</g>"));
+
+    if plan.path.len() > 1 {
+        svg.push_str(&format!(
+            "<path id=\"route\" d=\"{route}\" fill=\"none\" stroke=\"none\"/>"
+        ));
+        svg.push_str(&format!("<path class=\"body\" d=\"{route}\"/>"));
+        // Head at the leading edge, with two eyes.
+        let lead = body_length / path_length;
+        svg.push_str(&format!(
+            "<g><circle r=\"{:.1}\" fill=\"var(--cs)\"/><circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"var(--ce)\"/><circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"var(--ce)\"/><animateMotion dur=\"{duration:.3}s\" repeatCount=\"indefinite\" keyPoints=\"{lead:.4};1\" keyTimes=\"0;1\"><mpath href=\"#route\"/></animateMotion></g>",
+            options.cell as f32 / 2.0,
+            fmt(-(options.cell as f32 / 4.0)),
+            fmt(-(options.cell as f32 / 4.0)),
+            fmt((options.cell as f32 / 6.0).max(1.0)),
+            fmt(options.cell as f32 / 4.0),
+            fmt(-(options.cell as f32 / 4.0)),
+            fmt((options.cell as f32 / 6.0).max(1.0)),
+        ));
+    }
+    svg.push_str(&format!("<g class=\"eaten\">{eaten}</g>"));
     svg.push_str("</svg>");
 
     svg
+}
+
+/// Formats an `f32` without trailing zeros.
+fn fmt(value: f32) -> String {
+    if value.fract().abs() < 1e-4 {
+        format!("{value:.0}")
+    } else {
+        format!("{value:.2}")
+    }
 }
 
 /// Escapes the characters that are not allowed in XML text nodes.
@@ -205,24 +233,21 @@ mod tests {
         assert!(svg.starts_with("<svg "));
         assert!(svg.ends_with("</svg>"));
         assert!(svg.contains("<style>"));
-        assert!(svg.contains("@keyframes seg"));
+        assert!(svg.contains("@keyframes crawl"));
         assert!(svg.contains("class=\"l2\""));
-        assert!(svg.contains("class=\"l3\""));
-        assert!(svg.contains("class=\"seg\""));
+        assert!(svg.contains("class=\"body\""));
+        assert!(svg.contains("animateMotion"));
         assert!(svg.contains("class=\"eat\""));
-        assert!(svg.contains("class=\"snake\""));
     }
 
     #[test]
-    fn one_segment_per_visited_cell() {
+    fn route_visits_every_cell() {
         let grid = grid_with_food();
         let plan = crate::snake::plan(&grid);
         let svg = render(&grid, &plan, &RenderOptions::default());
 
-        let segments = svg.matches("class=\"seg\"").count();
-        let eats = svg.matches("class=\"eat\"").count();
-        assert_eq!(segments + eats, plan.path.len());
-        assert_eq!(eats, plan.eaten.len());
+        let commands = svg.matches('L').count() + svg.matches('M').count();
+        assert!(commands >= plan.path.len(), "route missing cells");
     }
 
     #[test]

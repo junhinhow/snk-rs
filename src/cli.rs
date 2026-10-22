@@ -55,11 +55,11 @@ pub struct Cli {
     pub color_dots: Vec<String>,
 
     /// Side of a single cell, in pixels.
-    #[arg(long, default_value_t = 11, value_name = "PX")]
+    #[arg(long, default_value_t = 12, value_name = "PX")]
     pub cell: u32,
 
     /// Space between two cells, in pixels.
-    #[arg(long, default_value_t = 2, value_name = "PX")]
+    #[arg(long, default_value_t = 4, value_name = "PX")]
     pub gap: u32,
 
     /// Space around the grid, in pixels.

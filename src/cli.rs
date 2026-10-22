@@ -66,9 +66,16 @@ pub struct Cli {
     #[arg(long, default_value_t = 4, value_name = "PX")]
     pub margin: u32,
 
-    /// Duration of one animation loop, in seconds.
-    #[arg(long, default_value_t = 10.0, value_name = "SECONDS")]
+    /// Duration of one snake animation loop, in seconds.
+    ///
+    /// The snake crosses the whole grid in this time, so a larger value means
+    /// a slower snake.
+    #[arg(long, default_value_t = 20.0, value_name = "SECONDS")]
     pub duration: f32,
+
+    /// Duration of the 3D bar growth animation, in seconds.
+    #[arg(long, default_value_t = 10.0, value_name = "SECONDS")]
+    pub three_d_duration: f32,
 
     /// First day of the period, as `YYYY-MM-DD`.
     #[arg(long, value_name = "DATE")]
@@ -145,7 +152,7 @@ impl Cli {
         Ok(Render3DOptions {
             style,
             animate: !self.no_animate,
-            duration: self.duration.max(0.5),
+            duration: self.three_d_duration.max(0.5),
             title: format!("{}'s GitHub 3D contribution profile", self.user),
             ..Render3DOptions::default()
         })

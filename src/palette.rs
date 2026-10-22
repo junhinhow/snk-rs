@@ -15,6 +15,8 @@ pub struct Palette {
     pub dots: [String; 5],
     /// Colour of the snake itself.
     pub snake: String,
+    /// Colour of the snake's head (brighter than the body).
+    pub head: String,
 }
 
 impl Palette {
@@ -32,6 +34,7 @@ impl Palette {
                 "#216e39".to_string(),
             ],
             snake: "#8957e5".to_string(),
+            head: "#a371f7".to_string(),
         }
     }
 
@@ -49,6 +52,7 @@ impl Palette {
                 "#39d353".to_string(),
             ],
             snake: "#8957e5".to_string(),
+            head: "#a371f7".to_string(),
         }
     }
 

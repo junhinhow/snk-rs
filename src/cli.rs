@@ -7,6 +7,7 @@ use clap::Parser;
 use crate::error::{Error, Result};
 use crate::palette::Palette;
 use crate::render::RenderOptions;
+use crate::render3d::{Render3DOptions, Style3D};
 
 /// Generate an animated snake that crawls your GitHub contribution graph.
 #[derive(Parser, Debug, Clone)]
@@ -80,6 +81,26 @@ pub struct Cli {
     /// `User-Agent` header sent to GitHub.
     #[arg(long, value_name = "AGENT")]
     pub user_agent: Option<String>,
+
+    /// What to render: `snake` (the animated snake) or `3d` (the isometric
+    /// contribution profile).
+    #[arg(long, value_name = "FORMAT", default_value = "snake")]
+    pub format: String,
+
+    /// Colour palette of the 3D profile: `green`, `night-green` or
+    /// `night-view`.
+    #[arg(long, value_name = "STYLE")]
+    pub style: Option<String>,
+
+    /// Do not animate the 3D bars.
+    #[arg(long)]
+    pub no_animate: bool,
+
+    /// Include the contributions of private repositories in the graph.
+    ///
+    /// Off by default: a profile README should show the public activity.
+    #[arg(long)]
+    pub include_private: bool,
 }
 
 impl Cli {
@@ -111,6 +132,31 @@ impl Cli {
             duration: self.duration,
             title: format!("{}'s GitHub contribution snake", self.user),
         })
+    }
+
+    /// Builds the options of the 3D renderer.
+    pub fn render3d_options(&self) -> Result<Render3DOptions> {
+        let style = match &self.style {
+            Some(name) => Style3D::named(name)
+                .ok_or_else(|| Error::Config(format!("unknown style `{name}`")))?,
+            None => Style3D::night_green(),
+        };
+
+        Ok(Render3DOptions {
+            style,
+            animate: !self.no_animate,
+            duration: self.duration.max(0.5),
+            title: format!("{}'s GitHub 3D contribution profile", self.user),
+            ..Render3DOptions::default()
+        })
+    }
+
+    /// `true` when the 3D profile should be rendered.
+    pub fn is_three_dimensional(&self) -> bool {
+        matches!(
+            self.format.trim().to_ascii_lowercase().as_str(),
+            "3d" | "profile"
+        )
     }
 }
 

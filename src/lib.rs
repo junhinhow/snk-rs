@@ -32,12 +32,14 @@ pub mod github;
 pub mod grid;
 pub mod palette;
 pub mod render;
+pub mod render3d;
 pub mod snake;
 
 pub use error::{Error, Result};
 pub use grid::Grid;
 pub use palette::Palette;
 pub use render::{render, RenderOptions};
+pub use render3d::{render3d, Render3DOptions, Style3D};
 pub use snake::{plan, SnakePlan};
 
 /// Version of the crate, useful when embedding the renderer.

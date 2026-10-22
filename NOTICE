@@ -13,9 +13,16 @@ This project is an independent Rust implementation of the idea popularised by:
     Copyright (c) 2021 Platane
     Licensed under the MIT License
 
-No source code from that project was copied into this repository. The
+The 3D contribution profile follows the same idea as:
+
+    github-profile-3d-contrib - https://github.com/yoshi389111/github-profile-3d-contrib
+    Copyright (c) 2021 SATO Yoshiyuki
+    Licensed under the MIT License
+
+No source code from those projects was copied into this repository. The
 inspiration is limited to the concept (a snake crawling the GitHub
-contribution graph) and the general visual language.
+contribution graph, and an isometric 3D profile of the same calendar) and
+the general visual language.
 
 Third party dependencies
 ------------------------

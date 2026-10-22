@@ -94,6 +94,11 @@ impl Grid {
     pub fn total(&self) -> i64 {
         self.cells.iter().flatten().map(|day| day.count).sum()
     }
+
+    /// Every day of the grid, in reading order.
+    pub fn get_all(&self) -> Vec<&crate::github::model::ContributionDay> {
+        self.cells.iter().flatten().collect()
+    }
 }
 
 /// Number of days between Monday and the given date (Monday is zero).

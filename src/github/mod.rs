@@ -3,6 +3,7 @@
 pub mod graphql;
 pub mod html;
 pub mod model;
+pub mod stats;
 
 use chrono::NaiveDate;
 use reqwest::blocking::Client;

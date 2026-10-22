@@ -2,8 +2,8 @@
 
 # 🐍 snk-rs
 
-**Uma cobra animada que percorre o seu contribution graph do GitHub.**
-**An animated snake that crawls your GitHub contribution graph.**
+**Uma cobra animada que percorre o seu contribution graph do GitHub — e um perfil 3D das suas contribuições.**
+**An animated snake that crawls your GitHub contribution graph — and a 3D profile of your contributions.**
 
 [![CI](https://github.com/junhinhow/snk-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/junhinhow/snk-rs/actions/workflows/ci.yml)
 [![Forgejo CI](https://forgejo.multiservidores.com.br/ajr/snk-rs/actions/workflows/ci.yml/badge.svg)](https://forgejo.multiservidores.com.br/ajr/snk-rs/actions/workflows/ci.yml)
@@ -31,11 +31,45 @@
 | Recurso / Feature | Detalhe / Detail |
 |---|---|
 | 🗓️ Duas fontes de dados | HTML público (sem token) ou GraphQL API (com token) / Public HTML (no token) or GraphQL API (with token) |
-| 🎨 Paletas | `github`, `github-light`, `github-dark` + cores customizadas / plus custom colours |
-| 📦 Saída | SVG único, animado por CSS, ~25 KB / single animated SVG, ~25 KB |
-| 🧪 Testado | 27 testes unitários e de integração / 27 unit and integration tests |
+| 🐍 Cobra animada | SVG de ~25 KB com rastro em `stroke-dashoffset` / ~25 KB SVG with a `stroke-dashoffset` trail |
+| 🧊 Perfil 3D | Barras isométricas + radar + donut de linguagens / Isometric bars + radar + language donut |
+| 🎨 Paletas | `github`, `github-light`, `github-dark` e `green`, `night-green`, `night-view` / plus custom colours |
+| 📦 Saída | SVG único, animado por CSS/SMIL / single animated SVG |
+| 🧪 Testado | 40 testes unitários e de integração / 40 unit and integration tests |
 | 🧩 Reutilizável | Biblioteca (`snk_rs`) + binário (`snk-rs`) / library + binary |
 | 🪶 Leve | 6 dependências, sem runtime de JS / 6 dependencies, no JS runtime |
+
+---
+
+## 🧊 O perfil 3D / The 3D profile
+
+**PT:** O mesmo binário desenha o **perfil 3D**: as barras isométricas que sobem conforme o
+número de contribuições, o **radar** com commits, issues, pull requests, reviews e repositórios,
+o **donut** com as linguagens e os contadores no rodapé.
+
+**EN:** The same binary renders the **3D profile**: isometric bars that grow with the number of
+contributions, a **radar** with commits, issues, pull requests, reviews and repositories, the
+**language donut** and the counters at the bottom.
+
+```bash
+# Perfil 3D noturno (verde, combinando com um README escuro)
+snk-rs --user junhinhow --format 3d --style night-green --output profile.svg
+
+# Versao clara e sem animacao
+snk-rs --user junhinhow --format 3d --style green --no-animate --output profile.svg
+
+# Com token: preenche o radar e o donut de linguagens
+GITHUB_TOKEN=ghp_xxx snk-rs --user junhinhow --format 3d --style night-green
+```
+
+Sem token o grafico continua sendo desenhado, apenas o radar e o donut ficam vazios.
+Without a token the graph is still drawn, only the radar and the donut stay empty.
+
+| Estilo / Style | Fundo / Background | Barras / Bars |
+|---|---|---|
+| `green` | branco / white | verde do GitHub / GitHub green |
+| `night-green` | `#0d1117` | verde escuro / dark green |
+| `night-view` | `#0d1117` | azul / blue |
 
 ---
 
@@ -44,18 +78,26 @@
 Este projeto é uma **implementação independente em Rust** da ideia popularizada pelo
 [`Platane/snk`](https://github.com/Platane/snk) (MIT). A referência original inspirou o conceito e o visual; o código aqui é do zero, com outra arquitetura.
 
-> Inspired by [`Platane/snk`](https://github.com/Platane/snk) by Platane — MIT licensed.
-> This is an independent re-implementation written in Rust. No code was copied.
+O **perfil 3D** segue a mesma linhagem do
+[`yoshi389111/github-profile-3d-contrib`](https://github.com/yoshi389111/github-profile-3d-contrib)
+(© SATO Yoshiyuki, MIT): barras isométricas, radar e donut de linguagens. Aqui a
+projeção, a escala logarítmica do radar e os arcos do donut são calculados em Rust
+puro, sem Node, sem D3 e sem jsdom.
+
+> Inspired by [`Platane/snk`](https://github.com/Platane/snk) by Platane and by
+> [`github-profile-3d-contrib`](https://github.com/yoshi389111/github-profile-3d-contrib)
+> by SATO Yoshiyuki — both MIT licensed. This is an independent re-implementation
+> written in Rust. No code was copied.
 
 **O que muda em relação ao original / What differs from the original**
 
-| | `Platane/snk` | `snk-rs` |
-|---|---|---|
-| Linguagem / Language | Go | **Rust** |
-| Fonte pública / Public source | GraphQL com token | **HTML público, sem token** |
-| Saída / Output | SVG + GIF | **SVG (GIF planejado)** |
-| API / API | Docker action | **CLI + biblioteca Rust** |
-| Uso da API / API usage | Container | **Binário nativo, ~1 MB** |
+| | `Platane/snk` | `github-profile-3d-contrib` | `snk-rs` |
+|---|---|---|---|
+| Linguagem / Language | Go | TypeScript + D3 | **Rust** |
+| Formatos / Formats | SVG + GIF | SVG 3D | **SVG 2D + SVG 3D** |
+| Fonte pública / Public source | GraphQL com token | GraphQL | **HTML público, sem token** |
+| API / API | Docker action | GitHub Action | **CLI + biblioteca Rust** |
+| Uso da API / API usage | Container | Node 24 | **Binário nativo, ~2 MB** |
 
 ---
 
@@ -116,6 +158,10 @@ GITHUB_TOKEN=ghp_xxx snk-rs --user junhinhow
 | `--from <DATE>` | — | Início do período (`YYYY-MM-DD`) / Start of the period |
 | `--to <DATE>` | — | Fim do período / End of the period |
 | `--token <TOKEN>` | `$GITHUB_TOKEN` | Token do GitHub / GitHub token |
+| `--format <FORMAT>` | `snake` | `snake` ou `3d` / `snake` or `3d` |
+| `--style <STYLE>` | `night-green` | `green`, `night-green` ou `night-view` (formato 3D) |
+| `--no-animate` | — | Não anima as barras 3D / Do not animate the 3D bars |
+| `--include-private` | — | Inclui contribuições privadas no gráfico / Include private contributions |
 
 ### 🐙 GitHub Actions
 
@@ -175,24 +221,32 @@ src/
 ├── palette.rs         # paletas e cores / palettes and colours
 ├── grid.rs            # grade de dias / grid of days
 ├── snake.rs           # planeamento do caminho (BFS) / path planning (BFS)
-├── render.rs          # geração do SVG / SVG generation
+├── render.rs          # geração do SVG 2D / 2D SVG generation
+├── render3d/          # perfil 3D / 3D profile
+│   ├── mod.rs         # paletas, layout e montagem / palettes, layout and assembly
+│   ├── iso.rs         # projeção isométrica / isometric projection
+│   ├── radar.rs       # radar em escala log / radar on a log scale
+│   └── donut.rs       # donut de linguagens / language donut
 ├── error.rs           # tipos de erro / error types
 └── github/
     ├── mod.rs         # cliente HTTP / HTTP client
     ├── model.rs       # ContributionDay, ContributionCalendar
     ├── html.rs        # página pública de contribuições / public contributions page
-    └── graphql.rs     # API GraphQL / GraphQL API
+    ├── graphql.rs     # API GraphQL / GraphQL API
+    └── stats.rs       # radar, donut e contadores / radar, donut and counters
 ```
 
 **Fluxo / Flow**
 
 ```
-GitHub ──▶ GitHubClient ──▶ ContributionCalendar ──▶ Grid ──▶ SnakePlan ──▶ SVG
+GitHub ──▶ GitHubClient ──▶ ContributionCalendar ──▶ Grid ──┬─▶ SnakePlan ──▶ SVG 2D
+                                                             └─▶ ProfileStats ──▶ SVG 3D
 ```
 
 - **`Grid`** alinha as semanas de segunda a domingo, exatamente como o GitHub desenha, e garante que nenhum dia sobrescreva outro.
 - **`SnakePlan`** usa BFS para sempre encontrar o dia com contribuição mais próximo; como a cobra pode cruzar o próprio rastro, ela nunca fica presa.
 - **`render`** reduz o caminho aos cantos, o que mantém o SVG pequeno, e usa uma única animação de `stroke-dashoffset` para o rastro mais um `@keyframes` para a cabeça.
+- **`render3d`** projeta cada dia como um cubo isométrico de três faces, anima o crescimento com SMIL e desenha o radar em escala logarítmica (1, 10, 100, 1K, 10K) e o donut a partir do tamanho em bytes de cada linguagem.
 
 ---
 

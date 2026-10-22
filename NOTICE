@@ -1,0 +1,33 @@
+NOTICE
+======
+
+snk-rs
+Copyright (c) 2026 Altair Jr
+
+Inspiration
+-----------
+
+This project is an independent Rust implementation of the idea popularised by:
+
+    snk - https://github.com/Platane/snk
+    Copyright (c) 2021 Platane
+    Licensed under the MIT License
+
+No source code from that project was copied into this repository. The
+inspiration is limited to the concept (a snake crawling the GitHub
+contribution graph) and the general visual language.
+
+Third party dependencies
+------------------------
+
+This project depends on the following crates, each under its own license:
+
+    clap      - MIT OR Apache-2.0
+    reqwest   - MIT OR Apache-2.0
+    serde     - MIT OR Apache-2.0
+    serde_json- MIT OR Apache-2.0
+    chrono    - MIT OR Apache-2.0
+    thiserror - MIT OR Apache-2.0
+    regex     - MIT OR Apache-2.0
+
+Run `cargo license` or `cargo deny check` for the full, machine readable list.

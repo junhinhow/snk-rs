@@ -1,0 +1,38 @@
+[package]
+name = "snk-rs"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+description = "Generate an animated snake that crawls your GitHub contribution graph"
+license = "MIT"
+repository = "https://github.com/junhinhow/snk-rs"
+homepage = "https://github.com/junhinhow/snk-rs"
+keywords = ["github", "contributions", "snake", "svg", "animation", "profile-readme"]
+categories = ["command-line-utilities", "visualization"]
+readme = "README.md"
+exclude = ["/.github", "/.forgejo", "/media"]
+
+[lib]
+name = "snk_rs"
+path = "src/lib.rs"
+
+[[bin]]
+name = "snk-rs"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive", "env"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls", "gzip", "charset", "http2", "json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+thiserror = "2.0"
+regex = "1.11"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

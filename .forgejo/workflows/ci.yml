@@ -3,67 +3,53 @@ name: CI
 on:
   push:
     branches: [main]
+    paths:
+      - "**/*.rs"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".forgejo/workflows/ci.yml"
   pull_request:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: "-D warnings"
 
 jobs:
   quality:
     name: fmt, clippy and tests
-    # The runner maps the label "docker" to node:20-bookworm. A job container
-    # needs node (for the JavaScript actions) and git, so node:20-bookworm is
-    # used and the Rust toolchain is installed on top of it.
-    runs-on: docker
-    container:
-      image: node:20-bookworm
+    runs-on: ubuntu-latest
     steps:
-      - name: Install the Rust toolchain
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-            | sh -s -- -y --profile minimal --default-toolchain stable
-          . "$HOME/.cargo/env"
-          rustup component add rustfmt clippy
+      - uses: actions/checkout@v4
 
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       - name: Check the formatting
-        run: . "$HOME/.cargo/env" && cargo fmt --all -- --check
+        run: cargo fmt --all -- --check
 
       - name: Run clippy
-        run: . "$HOME/.cargo/env" && cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Run the tests
-        run: . "$HOME/.cargo/env" && cargo test --all-features
+        run: cargo test --all-features
 
   build:
     name: build
-    runs-on: docker
-    container:
-      image: node:20-bookworm
+    runs-on: ubuntu-latest
     steps:
-      - name: Install the Rust toolchain
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-            | sh -s -- -y --profile minimal --default-toolchain stable
-          . "$HOME/.cargo/env"
+      - uses: actions/checkout@v4
 
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Build the release binary
-        run: . "$HOME/.cargo/env" && cargo build --release --locked
+        run: cargo build --release --locked
 
       - name: Generate a snake to prove the tool works
         run: |
-          . "$HOME/.cargo/env"
           cargo run --release -- \
             --user octocat \
             --palette github-dark \

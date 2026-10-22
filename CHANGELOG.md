@@ -13,22 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   10s. The body length (9 cells) and the grid stay exactly the same.
 - `--duration` now only drives the snake; the 3D bars have their own
   `--3d-duration` flag (10s) so the two animations stay independent.
-
-### Changed
-
-- The snake now crawls over the whole grid in a serpentine instead of only
-  hopping between the days with contributions, so the animation fills the
-  board like the classic game.
-- The body is a solid rounded stroke that slides along the route (a moving
-  dash) with a head and eyes following the leading edge, replacing the
-  previous approach of cells blinking in sequence.
+- The snake crawls over the whole grid in a serpentine instead of only hopping
+  between the days with contributions, so the animation fills the board like
+  the classic game.
+- The body is drawn as grid cells that light up in turn -- the leading cell is
+  the head in a brighter shade -- with a head and days that flash as they are
+  eaten. This is plain CSS animation with no SMIL, so the image renders
+  identically in every browser.
 
 ### Fixed
 
-- The grid was invisible on the dark palette: the background rectangle used
-  the same colour as the empty cells. The canvas now has its own colour
-  (`page`) and the empty cells are drawn against it.
-
+- The grid was invisible on the dark palette: the background rectangle used the
+  same colour as the empty cells. The canvas now has its own colour (`page`)
+  and the empty cells are drawn against it.
 ## [0.2.0] - 2026-10-22
 
 ### Added

@@ -17,17 +17,22 @@ env:
 jobs:
   quality:
     name: fmt, clippy and tests
-    runs-on: ubuntu-latest
+    # The runner maps the label "docker" to node:20-bookworm. A job container
+    # needs node (for the JavaScript actions) and git, so node:20-bookworm is
+    # used and the Rust toolchain is installed on top of it.
+    runs-on: docker
+    container:
+      image: node:20-bookworm
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Install the Rust toolchain
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
             | sh -s -- -y --profile minimal --default-toolchain stable
           . "$HOME/.cargo/env"
           rustup component add rustfmt clippy
+
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Check the formatting
         run: . "$HOME/.cargo/env" && cargo fmt --all -- --check
@@ -40,16 +45,18 @@ jobs:
 
   build:
     name: build
-    runs-on: ubuntu-latest
+    runs-on: docker
+    container:
+      image: node:20-bookworm
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Install the Rust toolchain
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
             | sh -s -- -y --profile minimal --default-toolchain stable
           . "$HOME/.cargo/env"
+
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Build the release binary
         run: . "$HOME/.cargo/env" && cargo build --release --locked

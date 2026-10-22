@@ -19,6 +19,9 @@ env:
 jobs:
   build:
     name: build ${{ matrix.name }}
+    # Only real tags produce a release. A push to a branch must never build
+    # binaries, otherwise every commit would spawn three runners.
+    if: github.event_name == 'push' || inputs.tag != ''
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -36,6 +39,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -68,6 +73,7 @@ jobs:
   release:
     name: publish the release
     needs: build
+    if: github.event_name == 'push' || inputs.tag != ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -80,6 +86,7 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
           files: dist/*
           generate_release_notes: true
           draft: false

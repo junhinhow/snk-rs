@@ -59,7 +59,6 @@ pub fn render(grid: &Grid, plan: &SnakePlan, options: &RenderOptions) -> String 
     // A cell is lit for as long as the head sits on it or just behind it.
     let body_window = (BODY_CELLS as f32 / steps) * 100.0;
     let head_window = (1.0 / steps) * 100.0;
-    let food_window = head_window;
 
     // --- cells -------------------------------------------------------------
     let mut cells = String::new();
@@ -97,15 +96,22 @@ pub fn render(grid: &Grid, plan: &SnakePlan, options: &RenderOptions) -> String 
     }
 
     // --- days eaten by the snake ------------------------------------------
+    // Each eaten day gets its own keyframes, timed to the moment the head
+    // reaches it. The day shows its contribution colour until that point, then
+    // is covered by the empty colour and stays gone for the rest of the loop.
     let mut eaten = String::new();
-    for (col, row, step) in &plan.eaten {
-        let delay = (*step as f32 / steps) * duration;
+    let mut eat_keyframes = String::new();
+    for (index, (col, row, step)) in plan.eaten.iter().enumerate() {
+        let arrival = (*step as f32 / steps) * 100.0;
+        let vanish = (arrival + 0.4).min(99.5);
+        eat_keyframes.push_str(&format!(
+            "@keyframes eat{index}{{0%{{opacity:0}}{arrival:.3}%{{opacity:0}}{vanish:.3}%{{opacity:1}}100%{{opacity:1}}}}"
+        ));
+        let x = options.margin + *col as u32 * pitch;
+        let y = options.margin + *row as u32 * pitch;
         eaten.push_str(&format!(
-            "<rect class=\"eat\" style=\"animation-delay:{delay:.3}s\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{radius}\"/>",
-            options.margin + *col as u32 * pitch,
-            options.margin + *row as u32 * pitch,
-            options.cell,
-            options.cell
+            "<rect class=\"eat\" style=\"animation:eat{index} {duration:.3}s linear infinite\" x=\"{x}\" y=\"{y}\" width=\"{}\" height=\"{}\" rx=\"{radius}\"/>",
+            options.cell, options.cell
         ));
     }
 
@@ -149,20 +155,21 @@ pub fn render(grid: &Grid, plan: &SnakePlan, options: &RenderOptions) -> String 
     svg.push_str(&format!(
         ".head{{fill:var(--ch);opacity:0;animation:head {duration:.3}s linear infinite}}"
     ));
-    svg.push_str(&format!(
-        ".eat{{fill:var(--c4);opacity:0;animation:eat {duration:.3}s linear infinite}}"
-    ));
+    // The eaten cover: empty colour, drawn above the grid but below the snake.
+    // It turns opaque when the head reaches the cell, hiding the food for the
+    // rest of the loop; it resets to transparent when the loop restarts.
+    svg.push_str(".eat{fill:var(--ce);opacity:0}");
     svg.push_str(&keyframes("seg", body_window));
     svg.push_str(&keyframes("head", head_window));
-    svg.push_str(&keyframes("eat", food_window));
+    svg.push_str(&eat_keyframes);
     svg.push_str("</style>");
 
     svg.push_str(&format!(
         "<rect class=\"bg\" width=\"{width}\" height=\"{height}\" rx=\"{radius}\"/>"
     ));
     svg.push_str(&format!("<g class=\"grid\">{cells}</g>"));
-    svg.push_str(&format!("<g class=\"snake\">{snake}</g>"));
     svg.push_str(&format!("<g class=\"eaten\">{eaten}</g>"));
+    svg.push_str(&format!("<g class=\"snake\">{snake}</g>"));
     svg.push_str("</svg>");
 
     svg

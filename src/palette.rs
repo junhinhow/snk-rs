@@ -70,8 +70,12 @@ impl Palette {
     }
 
     /// Overrides the snake colour.
+    ///
+    /// The head is derived from it so the two always belong to the same hue
+    /// (a purple head on a green body would look broken).
     pub fn with_snake(mut self, color: &str) -> Result<Self> {
         self.snake = normalize_color(color)?;
+        self.head = brighten(&self.snake, 1.5);
         Ok(self)
     }
 
@@ -123,6 +127,22 @@ fn expand_hex(hex: &str) -> Result<String> {
         return Err(Error::InvalidColor(hex.to_string()));
     }
     Ok(format!("#{expanded}"))
+}
+
+/// Lightens a `#rrggbb` colour by `ratio`, capping every channel at 255.
+///
+/// Used to derive a head colour that reads as the same hue as the body but
+/// clearly brighter.
+fn brighten(hex: &str, ratio: f32) -> String {
+    let channel =
+        |at: usize| u8::from_str_radix(hex.get(at..at + 2).unwrap_or("00"), 16).unwrap_or(0);
+    let lift = |c: u8| ((c as f32 * ratio).round() as i64).clamp(0, 255) as u8;
+    format!(
+        "#{:02x}{:02x}{:02x}",
+        lift(channel(1)),
+        lift(channel(3)),
+        lift(channel(5))
+    )
 }
 
 /// A few colour names, so `--color-snake green` just works.

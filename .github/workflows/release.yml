@@ -4,24 +4,13 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: "Tag to release (e.g. v0.1.0)"
-        required: true
 
 permissions:
   contents: write
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
   build:
     name: build ${{ matrix.name }}
-    # Only real tags produce a release. A push to a branch must never build
-    # binaries, otherwise every commit would spawn three runners.
-    if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.tag != ''
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -36,11 +25,10 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             name: snk-rs-macos-aarch64
-
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
+          ref: ${{ github.ref }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -57,12 +45,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          cp "target/${{ matrix.target }}/release/snk-rs${{ matrix.name | endswith('.exe') && '.exe' || '' }}" "dist/${{ matrix.name }}"
-          if [[ "${{ matrix.name }}" == *.exe ]]; then
-            cd dist && zip "${{ matrix.name }}.zip" "${{ matrix.name }}"
-          else
-            cd dist && tar czf "${{ matrix.name }}.tar.gz" "${{ matrix.name }}"
-          fi
+          cp "target/${{ matrix.target }}/release/snk-rs" "dist/${{ matrix.name }}"
+          cd dist && tar czf "${{ matrix.name }}.tar.gz" "${{ matrix.name }}"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -73,7 +57,6 @@ jobs:
   release:
     name: publish the release
     needs: build
-    if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.tag != ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -86,7 +69,6 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           files: dist/*
           generate_release_notes: true
           draft: false

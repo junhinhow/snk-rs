@@ -21,7 +21,7 @@ jobs:
     name: build ${{ matrix.name }}
     # Only real tags produce a release. A push to a branch must never build
     # binaries, otherwise every commit would spawn three runners.
-    if: github.event_name == 'push' || inputs.tag != ''
+    if: startsWith(github.ref, 'refs/tags/') || inputs.tag != ''
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -73,7 +73,7 @@ jobs:
   release:
     name: publish the release
     needs: build
-    if: github.event_name == 'push' || inputs.tag != ''
+    if: startsWith(github.ref, 'refs/tags/') || inputs.tag != ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

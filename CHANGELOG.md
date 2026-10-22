@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The snake crosses the grid at half speed: one loop now lasts 20s instead of
+  10s. The body length (9 cells) and the grid stay exactly the same.
+- `--duration` now only drives the snake; the 3D bars have their own
+  `--3d-duration` flag (10s) so the two animations stay independent.
+
+### Changed
+
 - The snake now crawls over the whole grid in a serpentine instead of only
   hopping between the days with contributions, so the animation fills the
   board like the classic game.

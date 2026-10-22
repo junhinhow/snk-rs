@@ -7,7 +7,9 @@ use crate::error::{Error, Result};
 pub struct Palette {
     /// Human readable name of the palette.
     pub name: String,
-    /// Background (and "empty cell") colour.
+    /// Colour of the canvas drawn behind the grid.
+    pub page: String,
+    /// Colour of a day without contributions.
     pub background: String,
     /// Colours for contribution levels `0..=4`.
     pub dots: [String; 5],
@@ -20,7 +22,8 @@ impl Palette {
     pub fn github_light() -> Self {
         Self {
             name: "github-light".to_string(),
-            background: "#ffffff".to_string(),
+            page: "#ffffff".to_string(),
+            background: "#ebedf0".to_string(),
             dots: [
                 "#ebedf0".to_string(),
                 "#9be9a8".to_string(),
@@ -36,6 +39,7 @@ impl Palette {
     pub fn github_dark() -> Self {
         Self {
             name: "github-dark".to_string(),
+            page: "#0d1117".to_string(),
             background: "#161b22".to_string(),
             dots: [
                 "#161b22".to_string(),

@@ -1,8 +1,18 @@
 //! The renderer: turns a grid and a snake plan into a self contained SVG.
+//!
+//! The snake is not drawn as a line but as a wave of cells lighting up in the
+//! order the head visits them: the lit cells *are* the body, the newest one is
+//! the head. This is what keeps the image readable when the contributions are
+//! sparse and the route is a set of long straight lines.
+
+use std::collections::HashSet;
 
 use crate::grid::Grid;
 use crate::palette::Palette;
 use crate::snake::SnakePlan;
+
+/// How many cells of the body are lit at the same time.
+const BODY_CELLS: f32 = 5.0;
 
 /// How the SVG should look.
 #[derive(Debug, Clone)]
@@ -49,8 +59,10 @@ pub fn render(grid: &Grid, plan: &SnakePlan, options: &RenderOptions) -> String 
     let x_of = |col: usize| options.margin + col as u32 * pitch;
     let y_of = |row: usize| options.margin + row as u32 * pitch;
 
-    let total_steps = plan.steps().max(1);
-    let path_length = total_steps as f32 * pitch as f32;
+    let total_steps = plan.path.len().max(1) as f32;
+    // How long a single cell stays lit: the body length, in seconds.
+    let flash = (BODY_CELLS / total_steps * duration).clamp(0.12, 1.5);
+    let eat_flash = (flash * 1.8).min(duration);
 
     // --- cells -------------------------------------------------------------
     let mut cells = String::new();
@@ -69,14 +81,18 @@ pub fn render(grid: &Grid, plan: &SnakePlan, options: &RenderOptions) -> String 
         }
     }
 
-    // --- cells eaten by the snake -----------------------------------------
-    const COVER_DURATION: f32 = 0.15;
-    let mut covers = String::new();
-    for (col, row, step) in &plan.eaten {
-        let arrival = (*step as f32 / total_steps as f32) * duration;
-        let delay = (arrival - COVER_DURATION).max(0.0);
-        covers.push_str(&format!(
-            "<rect class=\"cover\" style=\"animation-delay:{delay:.3}s\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{radius}\"/>",
+    // --- the snake: cells that light up in turn ----------------------------
+    let food: HashSet<(usize, usize)> = plan.eaten.iter().map(|(c, r, _)| (*c, *r)).collect();
+    let mut segments = String::new();
+    for (step, (col, row)) in plan.path.iter().enumerate() {
+        let delay = (step as f32 / total_steps) * duration;
+        let class = if food.contains(&(*col, *row)) {
+            "eat"
+        } else {
+            "seg"
+        };
+        segments.push_str(&format!(
+            "<rect class=\"{class}\" style=\"animation-delay:{delay:.3}s\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{radius}\"/>",
             x_of(*col),
             y_of(*row),
             options.cell,
@@ -84,31 +100,9 @@ pub fn render(grid: &Grid, plan: &SnakePlan, options: &RenderOptions) -> String 
         ));
     }
 
-    // --- trajectory --------------------------------------------------------
-    let corners = corners(&plan.path);
-    let mut route = String::new();
-    for (index, (col, row, _)) in corners.iter().enumerate() {
-        if index == 0 {
-            route.push_str(&format!("M {} {}", x_of(*col), y_of(*row)));
-        } else {
-            route.push_str(&format!(" L {} {}", x_of(*col), y_of(*row)));
-        }
-    }
-
-    // --- head keyframes ----------------------------------------------------
-    let mut keyframes = String::new();
-    for (col, row, step) in &corners {
-        let percent = (*step as f32 / total_steps as f32) * 100.0;
-        keyframes.push_str(&format!(
-            "{percent:.3}%{{transform:translate({}px,{}px)}}",
-            x_of(*col),
-            y_of(*row)
-        ));
-    }
-
     // --- assembly ----------------------------------------------------------
     let palette = &options.palette;
-    let mut svg = String::with_capacity(16 * 1024);
+    let mut svg = String::with_capacity(32 * 1024);
 
     svg.push_str(&format!(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width}\" height=\"{height}\" viewBox=\"0 0 {width} {height}\" role=\"img\" aria-label=\"{}\">",
@@ -125,7 +119,8 @@ pub fn render(grid: &Grid, plan: &SnakePlan, options: &RenderOptions) -> String 
 
     svg.push_str("<style>");
     svg.push_str(&format!(
-        ":root{{--ce:{};--cs:{};--c0:{};--c1:{};--c2:{};--c3:{};--c4:{}}}",
+        ":root{{--cp:{};--ce:{};--cs:{};--c0:{};--c1:{};--c2:{};--c3:{};--c4:{}}}",
+        palette.page,
         palette.background,
         palette.snake,
         palette.dots[0],
@@ -134,81 +129,40 @@ pub fn render(grid: &Grid, plan: &SnakePlan, options: &RenderOptions) -> String 
         palette.dots[3],
         palette.dots[4]
     ));
-    svg.push_str(".bg{fill:var(--ce)}");
+    svg.push_str(".bg{fill:var(--cp)}");
     svg.push_str(".l0{fill:var(--c0)}.l1{fill:var(--c1)}.l2{fill:var(--c2)}.l3{fill:var(--c3)}.l4{fill:var(--c4)}");
+    // Every segment animates over the whole loop, but only flashes inside the
+    // short window when the head passes over it. The delay of each cell places
+    // that window at the right moment.
+    let window = flash / duration * 100.0;
+    let eat_window = eat_flash / duration * 100.0;
+    svg.push_str(".seg{fill:var(--cs);opacity:0;animation:seg ");
+    svg.push_str(&format!("{duration:.3}s linear infinite}}"));
     svg.push_str(&format!(
-        ".cover{{fill:var(--ce);opacity:0;animation:cover {COVER_DURATION}s linear forwards}}"
+        ".eat{{fill:var(--c4);opacity:0;animation:eat {duration:.3}s linear infinite}}"
     ));
     svg.push_str(&format!(
-        ".trail{{fill:none;stroke:var(--cs);stroke-width:{};stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:{path_length};animation:drawtrail {duration}s linear infinite}}",
-        (options.cell as f32 * 0.55).max(2.0)
+        "@keyframes seg{{0%{{opacity:0}}{:.3}%{{opacity:1}}{:.3}%{{opacity:1}}{:.3}%{{opacity:0}}100%{{opacity:0}}}}",
+        window * 0.18,
+        window * 0.55,
+        window
     ));
     svg.push_str(&format!(
-        ".head{{fill:var(--cs);stroke:var(--ce);stroke-width:1;animation:headmove {duration}s linear infinite}}"
+        "@keyframes eat{{0%{{opacity:0}}{:.3}%{{opacity:1}}{:.3}%{{opacity:1}}{:.3}%{{opacity:0}}100%{{opacity:0}}}}",
+        eat_window * 0.18,
+        eat_window * 0.55,
+        eat_window
     ));
-    svg.push_str("@keyframes cover{from{opacity:0}to{opacity:1}}");
-    svg.push_str(&format!(
-        "@keyframes drawtrail{{from{{stroke-dashoffset:{path_length}}}to{{stroke-dashoffset:0}}}}"
-    ));
-    svg.push_str(&format!("@keyframes headmove{{{keyframes}}}"));
     svg.push_str("</style>");
 
     svg.push_str(&format!(
         "<rect class=\"bg\" width=\"{width}\" height=\"{height}\" rx=\"{radius}\"/>"
     ));
     svg.push_str(&format!("<g class=\"grid\">{cells}</g>"));
-    if !covers.is_empty() {
-        svg.push_str(&format!("<g class=\"covers\">{covers}</g>"));
-    }
-    if corners.len() > 1 {
-        svg.push_str(&format!("<path class=\"trail\" d=\"{route}\"/>"));
-    }
-    svg.push_str(&format!(
-        "<rect class=\"head\" x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" rx=\"{radius}\"/>",
-        (options.cell as f32 * 0.8).round().max(4.0) as u32,
-        (options.cell as f32 * 0.8).round().max(4.0) as u32
-    ));
+    svg.push_str(&format!("<g class=\"snake\">{segments}</g>"));
     svg.push_str("</svg>");
 
     svg
-}
-
-/// Reduces a path to its corner points, keeping the step index of each corner.
-///
-/// Collinear points are dropped: they do not change the shape of the line and
-/// they would only make the animation bigger.
-fn corners(path: &[(usize, usize)]) -> Vec<(usize, usize, usize)> {
-    if path.is_empty() {
-        return Vec::new();
-    }
-    if path.len() < 3 {
-        return path
-            .iter()
-            .enumerate()
-            .map(|(index, (col, row))| (*col, *row, index))
-            .collect();
-    }
-
-    let mut result = vec![(path[0].0, path[0].1, 0usize)];
-    for index in 1..path.len() - 1 {
-        let previous = path[index - 1];
-        let current = path[index];
-        let next = path[index + 1];
-        let direction_in = (
-            current.0 as isize - previous.0 as isize,
-            current.1 as isize - previous.1 as isize,
-        );
-        let direction_out = (
-            next.0 as isize - current.0 as isize,
-            next.1 as isize - current.1 as isize,
-        );
-        if direction_in != direction_out {
-            result.push((current.0, current.1, index));
-        }
-    }
-    let last = path.len() - 1;
-    result.push((path[last].0, path[last].1, last));
-    result
 }
 
 /// Escapes the characters that are not allowed in XML text nodes.
@@ -251,19 +205,32 @@ mod tests {
         assert!(svg.starts_with("<svg "));
         assert!(svg.ends_with("</svg>"));
         assert!(svg.contains("<style>"));
-        assert!(svg.contains("@keyframes headmove"));
+        assert!(svg.contains("@keyframes seg"));
         assert!(svg.contains("class=\"l2\""));
         assert!(svg.contains("class=\"l3\""));
-        assert!(svg.contains("class=\"cover\""));
-        assert!(svg.contains("class=\"trail\""));
-        assert!(svg.contains("class=\"head\""));
+        assert!(svg.contains("class=\"seg\""));
+        assert!(svg.contains("class=\"eat\""));
+        assert!(svg.contains("class=\"snake\""));
     }
 
     #[test]
-    fn corners_drop_collinear_points() {
-        let path = vec![(0, 0), (1, 0), (2, 0), (3, 0), (3, 1)];
-        let corners = corners(&path);
-        assert_eq!(corners, vec![(0, 0, 0), (3, 0, 3), (3, 1, 4)]);
+    fn one_segment_per_visited_cell() {
+        let grid = grid_with_food();
+        let plan = crate::snake::plan(&grid);
+        let svg = render(&grid, &plan, &RenderOptions::default());
+
+        let segments = svg.matches("class=\"seg\"").count();
+        let eats = svg.matches("class=\"eat\"").count();
+        assert_eq!(segments + eats, plan.path.len());
+        assert_eq!(eats, plan.eaten.len());
+    }
+
+    #[test]
+    fn the_grid_is_visible_against_the_page() {
+        let palette = Palette::github_dark();
+        assert_ne!(palette.page, palette.background);
+        let light = Palette::github_light();
+        assert_ne!(light.page, light.background);
     }
 
     #[test]

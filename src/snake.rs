@@ -2,10 +2,12 @@
 //!
 //! The snake hunts the contribution cells instead of sweeping the board: it
 //! works through the grid one intensity level at a time (level 1 first, then
-//! 2, 3 and 4) and, for each level, walks to the nearest cell it can still
-//! reach. Empty cells and cells of the current level or lower are walkable,
-//! while brighter cells act as walls until their turn comes -- this is what
-//! makes the snake wind across the calendar instead of running along a row.
+//! 2, 3 and 4) and, for each level, walks to the nearest cell it can reach.
+//! Empty cells and cells of the current level or lower are walkable, brighter
+//! cells are walls until their turn comes. Eaten food cells are avoided when
+//! possible so the snake winds around them instead of walking back through
+//! the cells it just passed; when there is no other route it still passes
+//! through, so every contribution gets eaten.
 
 use std::collections::{HashSet, VecDeque};
 
@@ -33,129 +35,6 @@ fn start_cell(grid: &Grid) -> (usize, usize) {
     (0, grid.rows.saturating_sub(1))
 }
 
-/// Plans the whole journey of the snake over the grid.
-///
-/// The snake starts at the bottom left and repeatedly walks to the nearest
-/// contribution cell it can still reach. It may cross empty cells and cells of
-/// the current intensity level or lower; brighter cells are walls. When no
-/// food of the current level is reachable the wall limit is raised by one, so
-/// the snake keeps hunting until every contribution has been eaten.
-pub fn plan(grid: &Grid) -> SnakePlan {
-    let start = start_cell(grid);
-
-    let mut path = vec![start];
-    let mut eaten = Vec::new();
-    let mut eaten_set: HashSet<(usize, usize)> = HashSet::new();
-
-    if grid.is_food(start.0, start.1) {
-        eaten.push((start.0, start.1, 0));
-        eaten_set.insert(start);
-    }
-
-    // Brightest level the head is allowed to walk through right now.
-    let walkable = 1u8;
-
-    while let Some(segment) = hunt(
-        grid,
-        *path.last().expect("path is never empty"),
-        &eaten_set,
-        walkable,
-    ) {
-        for cell in segment {
-            let step = path.len();
-            path.push(cell);
-            if grid.is_food(cell.0, cell.1) && eaten_set.insert(cell) {
-                eaten.push((cell.0, cell.1, step));
-            }
-        }
-    }
-
-    SnakePlan { path, eaten }
-}
-
-/// Raises the wall limit until some food becomes reachable, then walks to it.
-///
-/// Returns the cells of the walk (excluding the current head) or `None` when
-/// nothing is left to eat.
-fn hunt(
-    grid: &Grid,
-    head: (usize, usize),
-    eaten: &HashSet<(usize, usize)>,
-    mut walkable: u8,
-) -> Option<Vec<(usize, usize)>> {
-    loop {
-        if let Some(segment) = bfs_to_food(grid, head, eaten, walkable) {
-            return Some(segment);
-        }
-        if walkable >= 4 {
-            return None;
-        }
-        walkable += 1;
-    }
-}
-
-/// Breadth first search from the head to the nearest reachable, uneaten cell.
-///
-/// The walkable set is every empty cell plus every cell whose level does not
-/// exceed `walkable`; the target is the first uneaten contribution cell of
-/// that set found by the search, which is also the closest one.
-fn bfs_to_food(
-    grid: &Grid,
-    head: (usize, usize),
-    eaten: &HashSet<(usize, usize)>,
-    walkable: u8,
-) -> Option<Vec<(usize, usize)>> {
-    let cols = grid.cols;
-    let index = |(col, row): (usize, usize)| row * cols + col;
-
-    let mut previous: Vec<Option<(usize, usize)>> = vec![None; cols * grid.rows];
-    let mut visited = vec![false; cols * grid.rows];
-    let mut queue: VecDeque<(usize, usize)> = VecDeque::new();
-
-    visited[index(head)] = true;
-    queue.push_back(head);
-
-    let mut target = None;
-    while let Some(current) = queue.pop_front() {
-        if current != head && !eaten.contains(&current) && level_of(grid, current) >= 1 {
-            target = Some(current);
-            break;
-        }
-        for neighbour in neighbours(grid, current) {
-            let idx = index(neighbour);
-            if !visited[idx] && is_walkable(grid, neighbour, eaten, walkable) {
-                visited[idx] = true;
-                previous[idx] = Some(current);
-                queue.push_back(neighbour);
-            }
-        }
-    }
-
-    let target = target?;
-    // Walk the chain of parents back to the head and reverse it.
-    let mut segment = Vec::new();
-    let mut cursor = target;
-    while cursor != head {
-        segment.push(cursor);
-        cursor = previous[index(cursor)]?;
-    }
-    segment.reverse();
-    Some(segment)
-}
-
-/// Whether the head may step onto a cell.
-fn is_walkable(
-    grid: &Grid,
-    cell: (usize, usize),
-    eaten: &HashSet<(usize, usize)>,
-    walkable: u8,
-) -> bool {
-    if eaten.contains(&cell) {
-        return true;
-    }
-    level_of(grid, cell) <= walkable
-}
-
 /// The intensity level of a cell, or `0` when the day has no contribution.
 fn level_of(grid: &Grid, (col, row): (usize, usize)) -> u8 {
     grid.get(col, row).map(|day| day.level).unwrap_or(0)
@@ -177,6 +56,192 @@ fn neighbours(grid: &Grid, (col, row): (usize, usize)) -> Vec<(usize, usize)> {
         result.push((col, row + 1));
     }
     result
+}
+
+/// Plans the whole journey of the snake over the grid.
+pub fn plan(grid: &Grid) -> SnakePlan {
+    let start = start_cell(grid);
+
+    let mut path = vec![start];
+    let mut eaten = Vec::new();
+    let mut eaten_set: HashSet<(usize, usize)> = HashSet::new();
+
+    if grid.is_food(start.0, start.1) {
+        eaten.push((start.0, start.1, 0));
+        eaten_set.insert(start);
+    }
+
+    let mut walkable = 1u8;
+
+    loop {
+        // Is there any uneaten food left?
+        let remaining: Vec<(usize, usize)> = (0..grid.rows)
+            .flat_map(|r| (0..grid.cols).map(move |c| (c, r)))
+            .filter(|&(c, r)| grid.is_food(c, r) && !eaten_set.contains(&(c, r)))
+            .collect();
+        if remaining.is_empty() {
+            break;
+        }
+
+        let head = *path.last().expect("path is never empty");
+
+        // BFS to the nearest uneaten food of level <= walkable.
+        // First try: avoid already-eaten food cells (winding path).
+        let target = bfs_to_food(grid, head, &eaten_set, walkable, true);
+        let target = match target {
+            Some(t) => t,
+            None => {
+                // Fallback: allow walking through eaten cells.
+                match bfs_to_food(grid, head, &eaten_set, walkable, false) {
+                    Some(t) => t,
+                    None => {
+                        if walkable < 4 {
+                            walkable += 1;
+                            continue;
+                        }
+                        break;
+                    }
+                }
+            }
+        };
+
+        // Take the full BFS path to the target.
+        let segment = bfs_path(grid, head, target, &eaten_set, walkable, true);
+        let segment = match segment {
+            Some(s) => s,
+            None => {
+                // Fallback: allow walking through eaten cells.
+                match bfs_path(grid, head, target, &eaten_set, walkable, false) {
+                    Some(s) => s,
+                    None => {
+                        if walkable < 4 {
+                            walkable += 1;
+                            continue;
+                        }
+                        break;
+                    }
+                }
+            }
+        };
+
+        for cell in segment {
+            let step = path.len();
+            path.push(cell);
+            if grid.is_food(cell.0, cell.1) && eaten_set.insert(cell) {
+                eaten.push((cell.0, cell.1, step));
+            }
+        }
+    }
+
+    SnakePlan { path, eaten }
+}
+
+/// BFS from the head to find the nearest uneaten food cell of level <= walkable.
+fn bfs_to_food(
+    grid: &Grid,
+    head: (usize, usize),
+    eaten: &HashSet<(usize, usize)>,
+    walkable: u8,
+    avoid_eaten: bool,
+) -> Option<(usize, usize)> {
+    let cols = grid.cols;
+    let index = |(col, row): (usize, usize)| row * cols + col;
+
+    let mut visited = vec![false; cols * grid.rows];
+    let mut queue: VecDeque<(usize, usize)> = VecDeque::new();
+
+    visited[index(head)] = true;
+    queue.push_back(head);
+
+    while let Some(current) = queue.pop_front() {
+        if current != head && !eaten.contains(&current) {
+            let lvl = level_of(grid, current);
+            if lvl >= 1 && lvl <= walkable {
+                return Some(current);
+            }
+        }
+        for neighbour in neighbours(grid, current) {
+            let idx = index(neighbour);
+            if visited[idx] {
+                continue;
+            }
+            let passable = if eaten.contains(&neighbour) {
+                true
+            } else {
+                level_of(grid, neighbour) <= walkable
+            };
+            if !passable {
+                continue;
+            }
+            if avoid_eaten && eaten.contains(&neighbour) {
+                continue;
+            }
+            visited[idx] = true;
+            queue.push_back(neighbour);
+        }
+    }
+
+    None
+}
+
+/// BFS path from the head to the target. Returns the cells of the walk
+/// (excluding the current head).
+fn bfs_path(
+    grid: &Grid,
+    head: (usize, usize),
+    target: (usize, usize),
+    eaten: &HashSet<(usize, usize)>,
+    walkable: u8,
+    avoid_eaten: bool,
+) -> Option<Vec<(usize, usize)>> {
+    if head == target {
+        return Some(Vec::new());
+    }
+
+    let cols = grid.cols;
+    let index = |(col, row): (usize, usize)| row * cols + col;
+
+    let mut previous: Vec<Option<(usize, usize)>> = vec![None; cols * grid.rows];
+    let mut visited = vec![false; cols * grid.rows];
+    let mut queue: VecDeque<(usize, usize)> = VecDeque::new();
+
+    visited[index(head)] = true;
+    queue.push_back(head);
+
+    while let Some(current) = queue.pop_front() {
+        if current == target {
+            let mut segment = Vec::new();
+            let mut cursor = target;
+            while cursor != head {
+                segment.push(cursor);
+                cursor = previous[index(cursor)]?;
+            }
+            segment.reverse();
+            return Some(segment);
+        }
+        for neighbour in neighbours(grid, current) {
+            let idx = index(neighbour);
+            if visited[idx] {
+                continue;
+            }
+            let passable = if eaten.contains(&neighbour) || neighbour == target {
+                true
+            } else {
+                level_of(grid, neighbour) <= walkable
+            };
+            if !passable {
+                continue;
+            }
+            if avoid_eaten && eaten.contains(&neighbour) {
+                continue;
+            }
+            visited[idx] = true;
+            previous[idx] = Some(current);
+            queue.push_back(neighbour);
+        }
+    }
+
+    None
 }
 
 #[cfg(test)]
@@ -238,9 +303,6 @@ mod tests {
 
     #[test]
     fn the_snake_hunts_instead_of_sweeping_the_board() {
-        // A wide grid (ten weeks) whose only contributions sit in the very
-        // first column. The snake should walk straight to them and stop, not
-        // fill the empty columns to its right.
         let start = NaiveDate::parse_from_str("2024-01-01", "%Y-%m-%d").unwrap();
         let food = NaiveDate::parse_from_str("2024-01-03", "%Y-%m-%d").unwrap();
         let days: Vec<ContributionDay> = (0..70)
@@ -272,8 +334,6 @@ mod tests {
 
     #[test]
     fn brighter_food_waits_for_its_turn() {
-        // A level 4 cell boxed in by empty space is only reachable once the
-        // wall limit reaches 4; the snake must still eat it in the end.
         let calendar = calendar(&[("2024-01-03", 4), ("2024-01-20", 1)]);
         let grid = Grid::from_calendar(&calendar).unwrap();
         let plan = plan(&grid);

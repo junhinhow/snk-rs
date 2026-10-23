@@ -119,7 +119,7 @@ pub fn render(grid: &Grid, plan: &SnakePlan, options: &RenderOptions) -> String 
     let mut eat_keyframes = String::new();
     for (index, (col, row, step)) in plan.eaten.iter().enumerate() {
         let arrival = (*step as f32 / steps) * 100.0;
-        let vanish = (arrival + 0.4).min(99.5);
+        let vanish = (arrival + 0.01).min(99.5);
         eat_keyframes.push_str(&format!(
             "@keyframes eat{index}{{0%{{opacity:0}}{arrival:.3}%{{opacity:0}}{vanish:.3}%{{opacity:1}}100%{{opacity:1}}}}"
         ));

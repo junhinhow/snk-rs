@@ -88,10 +88,26 @@ pub fn render(grid: &Grid, plan: &SnakePlan, options: &RenderOptions) -> String 
             "<rect class=\"seg\" style=\"animation-delay:{delay:.3}s\" x=\"{x}\" y=\"{y}\" width=\"{}\" height=\"{}\" rx=\"{radius}\"/>",
             options.cell, options.cell
         ));
-        // Head, drawn on top of the body at the same moment.
+        // Head, drawn on top of the body at the same moment: a rounded
+        // square with two eyes so it reads as a snake, not a blob.
+        let eye = (options.cell as f32 / 8.0).max(1.0);
+        let eye1 = (options.cell as f32 * 0.25).round().max(2.0);
+        let eye2 = (options.cell as f32 * 0.75)
+            .round()
+            .min(options.cell as f32 - 2.0);
+        let eye_y = (options.cell as f32 * 0.35).round().max(2.0);
         snake.push_str(&format!(
-            "<rect class=\"head\" style=\"animation-delay:{delay:.3}s\" x=\"{x}\" y=\"{y}\" width=\"{}\" height=\"{}\" rx=\"{radius}\"/>",
-            options.cell, options.cell
+            "<g class=\"head\" style=\"animation-delay:{delay:.3}s\" transform=\"translate({x},{y})\">\
+               <rect x=\"0\" y=\"0\" width=\"{cell}\" height=\"{cell}\" rx=\"{hr}\"/>\
+               <circle cx=\"{eye1:.0}\" cy=\"{eye_y:.0}\" r=\"{eye:.1}\" fill=\"var(--ce)\"/>\
+               <circle cx=\"{eye2:.0}\" cy=\"{eye_y:.0}\" r=\"{eye:.1}\" fill=\"var(--ce)\"/>\
+             </g>",
+            cell = options.cell,
+            hr = (options.cell / 2).max(4),
+            eye1 = eye1,
+            eye2 = eye2,
+            eye_y = eye_y,
+            eye = eye,
         ));
     }
 
@@ -111,6 +127,21 @@ pub fn render(grid: &Grid, plan: &SnakePlan, options: &RenderOptions) -> String 
         let y = options.margin + *row as u32 * pitch;
         eaten.push_str(&format!(
             "<rect class=\"eat\" style=\"animation:eat{index} {duration:.3}s linear infinite\" x=\"{x}\" y=\"{y}\" width=\"{}\" height=\"{}\" rx=\"{radius}\"/>",
+            options.cell, options.cell
+        ));
+    }
+
+    // --- bite flash, on top of everything ----------------------------------
+    // A brief, distinct flash on the cell as the head bites it, so the
+    // eating is visible even though the snake body and the food share the
+    // green palette.
+    let mut bite = String::new();
+    for (col, row, step) in &plan.eaten {
+        let delay = (*step as f32 / steps) * duration;
+        let x = options.margin + *col as u32 * pitch;
+        let y = options.margin + *row as u32 * pitch;
+        bite.push_str(&format!(
+            "<rect class=\"bite\" style=\"animation-delay:{delay:.3}s\" x=\"{x}\" y=\"{y}\" width=\"{}\" height=\"{}\" rx=\"{radius}\"/>",
             options.cell, options.cell
         ));
     }
@@ -159,6 +190,15 @@ pub fn render(grid: &Grid, plan: &SnakePlan, options: &RenderOptions) -> String 
     // It turns opaque when the head reaches the cell, hiding the food for the
     // rest of the loop; it resets to transparent when the loop restarts.
     svg.push_str(".eat{fill:var(--ce);opacity:0}");
+    // The bite flash: a brief, bright pop on top of everything when the head
+    // bites the cell, so the eating is visible even though the snake body and
+    // the food share the green palette.
+    svg.push_str(&format!(
+        ".bite{{fill:#ffffff;opacity:0;animation:bite {duration:.3}s linear infinite}}"
+    ));
+    svg.push_str(
+        "@keyframes bite{0%{opacity:0}1.5%{opacity:1}3%{opacity:1}6%{opacity:0}100%{opacity:0}}",
+    );
     svg.push_str(&keyframes("seg", body_window));
     svg.push_str(&keyframes("head", head_window));
     svg.push_str(&eat_keyframes);
@@ -170,6 +210,7 @@ pub fn render(grid: &Grid, plan: &SnakePlan, options: &RenderOptions) -> String 
     svg.push_str(&format!("<g class=\"grid\">{cells}</g>"));
     svg.push_str(&format!("<g class=\"eaten\">{eaten}</g>"));
     svg.push_str(&format!("<g class=\"snake\">{snake}</g>"));
+    svg.push_str(&format!("<g class=\"bitten\">{bite}</g>"));
     svg.push_str("</svg>");
 
     svg
